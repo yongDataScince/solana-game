@@ -10,16 +10,17 @@ use solana_program::{
 };
 use crate::{
     instructions::PixelBattleInstructrions,
-    state::Settings,
+    state::{Settings, Data},
     errors::DepositError,
     SETTINGS_SEED,
+    DATA_SEED,
     id
 };
 pub struct Process;
 
 impl Process {
     pub fn process(
-        program_id: &Pubkey,
+        _program_id: &Pubkey,
         accounts: &[AccountInfo],
         data: &[u8]
     ) -> ProgramResult {
@@ -31,18 +32,44 @@ impl Process {
                 height,
                 cost 
             } => Self::init_game(accounts, width, height, cost),
-            PixelBattleInstructrions::Clear { width, height, cost } => Self::update_cost(),
+            PixelBattleInstructrions::Clear => Self::clear(accounts),
             PixelBattleInstructrions::UpdateCost { cost } => todo!(),
             PixelBattleInstructrions::Draw { x, y, color } => todo!(),
         }?;
         Ok(())
     }
 
-    fn clear() -> ProgramResult {
+    fn clear(accounts: &[AccountInfo]) -> ProgramResult {
+        let accounts_iter = &mut accounts.iter();
+
+        let admin_info = next_account_info(accounts_iter)?;
+        let settings_info = next_account_info(accounts_iter)?;
+        let data_info = next_account_info(accounts_iter)?;
+
+        if !admin_info.is_signer {
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+
+        if Settings::is_ok_settings_pubkey(settings_info.key) {
+            return Err(DepositError::InvalidSettingsAccount.into())
+        }
+
+        if Data::is_ok_data_pubkey(data_info.key) {
+            return Err(DepositError::InvalidDataAccount.into())
+        }
+
+        let settings = Settings::try_from_slice(&settings_info.data.borrow())?;
+
+        let mut default_data = Data::new();
+        default_data.create_empty_field(settings.width, settings.height);
+
+        let _ = default_data.serialize(&mut &mut data_info.data.borrow_mut()[..]);
+        msg!("Field Cleared");
         Ok(())
     }
 
     fn update_cost() -> ProgramResult {
+
         Ok(())
     }
 
@@ -56,10 +83,13 @@ impl Process {
 
         let admin_info = next_account_info(accounts_iter)?;
         let settings_info = next_account_info(accounts_iter)?;
+        let data_info = next_account_info(accounts_iter)?;
         let rent_info = next_account_info(accounts_iter)?;
         let system_program_info = next_account_info(accounts_iter)?;
 
         let (settings_pubkey, settings_bump) = Settings::get_settings_pubkey_with_bump();
+        let (data_pubkey, data_bump) = Settings::get_settings_pubkey_with_bump();
+
         if settings_pubkey != *settings_info.key {
             return Err(DepositError::InvalidSettingsAccount.into());
         }
@@ -72,6 +102,10 @@ impl Process {
             return Err(DepositError::AlreadyInit.into());
         }
 
+        if data_pubkey != *data_info.key {
+            return Err(DepositError::InvalidDataAccount.into());
+        }
+
         let settings =  Settings {
             admin: admin_info.key.to_bytes(),
             cost,
@@ -79,24 +113,46 @@ impl Process {
             height
         };
 
-        let space = settings.try_to_vec()?.len();
-        let rent = &Rent::from_account_info(rent_info)?;
-        let lamports = rent.minimum_balance(space);
-        let signer_seeds: &[&[_]] = &[SETTINGS_SEED.as_bytes(), &[settings_bump]];
+        let settings_space = settings.try_to_vec()?.len();
+        let settings_rent = &Rent::from_account_info(rent_info)?;
+        let settings_lamports = settings_rent.minimum_balance(settings_space);
+        let settings_signer_seeds: &[&[_]] = &[SETTINGS_SEED.as_bytes(), &[settings_bump]];
 
         invoke_signed(
             &system_instruction::create_account(
                 admin_info.key,
                 &settings_pubkey,
-                lamports,
-                space as u64,
+                settings_lamports,
+                settings_space as u64,
                 &id()
             ),
             &[admin_info.clone(), settings_info.clone(), system_program_info.clone()],
-            &[&signer_seeds]
+            &[&settings_signer_seeds]
         )?;
 
+        let mut data = Data::new();
+        data.create_empty_field(width, height);
+
+        let data_space = data.try_to_vec()?.len();
+        let data_rent = &Rent::from_account_info(rent_info)?;
+        let data_lamports = data_rent.minimum_balance(data_space);
+        let data_signer_seeds: &[&[_]] = &[DATA_SEED.as_bytes(), &[data_bump]];
+
+        invoke_signed(
+            &system_instruction::create_account(
+                admin_info.key,
+                &data_pubkey,
+                data_lamports,
+                data_space as u64,
+                &id()
+            ),
+            &[admin_info.clone(), data_info.clone(), system_program_info.clone()],
+            &[&data_signer_seeds]
+        )?;
+
+        let _ = data.serialize(&mut &mut data_info.data.borrow_mut()[..]);
         let _ = settings.serialize(&mut &mut settings_info.data.borrow_mut()[..]);
+
         msg!("Game init success");
         Ok(())
     }

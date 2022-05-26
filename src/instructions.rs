@@ -9,8 +9,9 @@ use solana_program::{
 pub enum PixelBattleInstructrions {
     // 1. `[signer, writable]` game's admin counter
     // 2. `[writable]` settings account, PDA
-    // 3. `[]` Rent sysvar
-    // 4. `[]` system program 
+    // 3. `[writable]` data account, PDA
+    // 4. `[]` Rent sysvar
+    // 5. `[]` system program 
     Init {
         width: u32,
         height: u32,
@@ -18,16 +19,14 @@ pub enum PixelBattleInstructrions {
     },
 
     // 1. `[signer, writable]` game's admin counter
-    // 2. `[writable]` settings account, PDA
+    // 2. `[]` settings info, PDA
+    // 2. `[writable]` data account, PDA
     // 3. `[]` system program 
-    Clear {
-        width: u32,
-        height: u32,
-        cost: u64
-    },
+    Clear,
 
     // 1. `[signer, writable]` game's admin counter
-    // 2. `[writable]` settings account, PDA
+    // 2. `[]` settings account, PDA
+    // 3. `[writable]` data accout, PDA
     // 3. `[]` system program 
     UpdateCost { cost: u64 },
 
