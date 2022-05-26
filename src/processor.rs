@@ -1,3 +1,4 @@
+use std::{convert::TryInto, borrow::BorrowMut};
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::{
     msg,
@@ -6,11 +7,11 @@ use solana_program::{
     entrypoint::{ ProgramResult },
     program_error::ProgramError,
     sysvar::{rent::Rent, Sysvar},
-    program::invoke_signed, system_instruction
+    program::{invoke, invoke_signed}, system_instruction
 };
 use crate::{
     instructions::PixelBattleInstructrions,
-    state::{Settings, Data},
+    state::{Settings, Data, Cell},
     errors::DepositError,
     SETTINGS_SEED,
     DATA_SEED,
@@ -33,8 +34,8 @@ impl Process {
                 cost 
             } => Self::init_game(accounts, width, height, cost),
             PixelBattleInstructrions::Clear => Self::clear(accounts),
-            PixelBattleInstructrions::UpdateCost { cost } => todo!(),
-            PixelBattleInstructrions::Draw { x, y, color } => todo!(),
+            PixelBattleInstructrions::WithDraw { cost, to } => todo!(),
+            PixelBattleInstructrions::Draw { x, y, color } => Self::draw(accounts, data, x, y, color),
         }?;
         Ok(())
     }
@@ -60,6 +61,10 @@ impl Process {
 
         let settings = Settings::try_from_slice(&settings_info.data.borrow())?;
 
+        if settings.admin != admin_info.key.to_bytes() {
+            return Err(DepositError::NotOwner.into());
+        }
+
         let mut default_data = Data::new();
         default_data.create_empty_field(settings.width, settings.height);
 
@@ -68,7 +73,42 @@ impl Process {
         Ok(())
     }
 
-    fn update_cost() -> ProgramResult {
+    fn draw(
+        accounts: &[AccountInfo], 
+        data: &[u8],
+        x: usize,
+        y: usize,
+        color: String
+    ) -> ProgramResult {
+        let accounts_iter = &mut accounts.iter();
+
+        let sender_info = next_account_info(accounts_iter)?;
+        let settings_info = next_account_info(accounts_iter)?;
+        let data_info = next_account_info(accounts_iter)?;
+        let wallet_info = next_account_info(accounts_iter)?;
+
+        let amount = data
+            .get(..8)
+            .and_then(|slice| slice.try_into().ok())
+            .map(u64::from_le_bytes)
+            .ok_or(ProgramError::InvalidInstructionData)?;
+        
+        let settings = Settings::try_from_slice(&settings_info.data.borrow())?;
+
+        if settings.cost > amount {
+            return Err(DepositError::NotEnough.into());
+        }
+
+        invoke(
+            &system_instruction::transfer(sender_info.key, wallet_info.key, amount),
+            &[sender_info.clone(), wallet_info.clone()],
+        )?;
+
+        let mut game_data = Data::try_from_slice(&data_info.data.borrow())?;
+
+        game_data.field[y][x] = Cell::new(sender_info.key.to_bytes() , color);
+
+        let _ = game_data.serialize(&mut &mut data_info.data.borrow_mut());
 
         Ok(())
     }

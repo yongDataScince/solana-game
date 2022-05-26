@@ -1,5 +1,5 @@
 use borsh::{BorshDeserialize, BorshSerialize};
-use solana_program::pubkey::Pubkey;
+use solana_program::{pubkey::Pubkey, account_info::AccountInfo, instruction::Instruction};
 use crate::{ SETTINGS_SEED, DATA_SEED, id };
 
 #[derive(BorshDeserialize, BorshSerialize)]
@@ -29,6 +29,12 @@ impl Settings {
 pub struct Cell {
     pub writer: [u8; 32],
     pub color: String
+}
+
+impl Cell {
+    pub fn new(writer: [u8; 32], color: String) -> Self {
+        Cell { writer, color }
+    }
 }
 
 impl Default for Cell {
@@ -71,5 +77,14 @@ impl Data {
     pub fn is_ok_data_pubkey(data_pubkey: &Pubkey) -> bool {
         let (pubkey, _) = Self::get_data_pubkey_with_bump();
         pubkey.to_bytes() == data_pubkey.to_bytes()
+    }
+}
+
+#[derive(BorshDeserialize, BorshSerialize)]
+pub struct GameWallet;
+
+impl GameWallet {
+    pub fn balance(account_info: &AccountInfo) -> u64 {
+        account_info.lamports()
     }
 }

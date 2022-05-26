@@ -11,7 +11,9 @@ pub enum DepositError {
     #[error("Already initialized")]
     AlreadyInit,
     #[error("Not owner")]
-    NotOwner
+    NotOwner,
+    #[error("Not enough lamports")]
+    NotEnough
 }
 
 impl From<DepositError> for ProgramError {

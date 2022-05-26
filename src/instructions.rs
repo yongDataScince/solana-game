@@ -25,13 +25,15 @@ pub enum PixelBattleInstructrions {
     Clear,
 
     // 1. `[signer, writable]` game's admin counter
-    // 2. `[]` settings account, PDA
-    // 3. `[writable]` data accout, PDA
-    // 3. `[]` system program 
-    UpdateCost { cost: u64 },
+    // 2. `[writable]` settings account, PDA
+    // 3. `[writable]` store SOLs account
+    // 4. `[]` system program 
+    WithDraw { cost: u64, to: [u8; 32] },
 
     // 1. `[signer]` player info
-    // 2. `[writable]` game accout, PDA
-    // 3. `[]` system program
-    Draw { x: u32, y: u32, color: String },
+    // 2. `[]` settings account, PDA
+    // 3. `[writable]` game accout, PDA
+    // 4. `[writable]` store SOLs account
+    // 5. `[]` system program
+    Draw { x: usize, y: usize, color: String },
 }
